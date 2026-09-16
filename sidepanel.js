@@ -727,9 +727,23 @@ async function handleFullAutoPipeline() {
 
     let lastEnrichError = '';
 
-    // STEP A: If Prospeo API Key is configured, query Prospeo (75 Free Verified Lookups/Mo on Free Tier!)
-    if (config.prospeoApiKey) {
-      scanHint.innerText = '⚡ Querying Prospeo 98% verified database...';
+    // STEP 1: Always resolve company domain first
+    if (!currentProspect.domain && currentProspect.company) {
+      scanHint.innerText = `Finding company domain for ${currentProspect.company}...`;
+      await handleResolveDomain();
+    } else if (currentProspect.domain) {
+      await checkDomainMX(currentProspect.domain);
+    }
+
+    // STEP 2: If Private SMTP Engine is prioritized (DEFAULT), verify directly via our engine ($0 / Self-Hosted)
+    if (config.usePrivateVerifier && config.verifierUrl && (currentProspect.domain || currentProspect.company)) {
+      scanHint.innerText = '⚡ Probing mail server via Private Engine ($0 Cost)...';
+      await handleGenerateAndVerify();
+    }
+
+    // STEP 3: Fallback to Prospeo ONLY if Private Engine did not verify a direct email
+    if (!currentProspect.directEmail && config.prospeoApiKey) {
+      scanHint.innerText = '⚡ Checking Prospeo fallback database...';
       const prospeoRes = await new Promise((resolve) => {
         chrome.runtime.sendMessage({
           type: 'ENRICH_PROSPEO',
@@ -752,11 +766,11 @@ async function handleFullAutoPipeline() {
           currentProspect.directEmail = prospeoRes.email;
           currentProspect.emailStatus = prospeoRes.emailStatus || 'Prospeo 98% Verified';
         }
-        if (prospeoRes.company) {
+        if (prospeoRes.company && !currentProspect.company) {
           currentProspect.company = prospeoRes.company;
           inputCompany.value = prospeoRes.company;
         }
-        if (prospeoRes.domain) {
+        if (prospeoRes.domain && !currentProspect.domain) {
           currentProspect.domain = prospeoRes.domain;
           inputDomain.value = prospeoRes.domain;
         }
@@ -764,7 +778,7 @@ async function handleFullAutoPipeline() {
           currentProspect.fullName = prospeoRes.fullName;
           prospectName.innerText = prospeoRes.fullName;
         }
-        if (prospeoRes.jobTitle) {
+        if (prospeoRes.jobTitle && (!currentProspect.jobTitle || currentProspect.jobTitle === 'No Title Listed')) {
           currentProspect.jobTitle = prospeoRes.jobTitle;
           prospectHeadline.innerText = prospeoRes.jobTitle;
         }
@@ -786,9 +800,9 @@ async function handleFullAutoPipeline() {
       }
     }
 
-    // STEP B: If Apollo API Key is configured and no email yet, query Apollo
+    // STEP 4: Fallback to Apollo (only if still no direct email)
     if (!currentProspect.directEmail && config.apolloApiKey) {
-      scanHint.innerText = '⚡ Querying Apollo 275M+ database...';
+      scanHint.innerText = '⚡ Checking Apollo fallback database...';
       const apolloRes = await new Promise((resolve) => {
         chrome.runtime.sendMessage({
           type: 'ENRICH_APOLLO',
@@ -814,15 +828,15 @@ async function handleFullAutoPipeline() {
           currentProspect.directEmail = apolloRes.email;
           currentProspect.emailStatus = apolloRes.emailStatus || 'Apollo Verified';
         }
-        if (apolloRes.company) {
+        if (apolloRes.company && !currentProspect.company) {
           currentProspect.company = apolloRes.company;
           inputCompany.value = apolloRes.company;
         }
-        if (apolloRes.domain) {
+        if (apolloRes.domain && !currentProspect.domain) {
           currentProspect.domain = apolloRes.domain;
           inputDomain.value = apolloRes.domain;
         }
-        if (apolloRes.jobTitle) {
+        if (apolloRes.jobTitle && (!currentProspect.jobTitle || currentProspect.jobTitle === 'No Title Listed')) {
           currentProspect.jobTitle = apolloRes.jobTitle;
           prospectHeadline.innerText = apolloRes.jobTitle;
         }
@@ -840,9 +854,9 @@ async function handleFullAutoPipeline() {
       }
     }
 
-    // STEP C: If Hunter API Key is configured and no email yet, query Hunter
+    // STEP 5: Fallback to Hunter (only if still no direct email)
     if (!currentProspect.directEmail && config.hunterApiKey && (currentProspect.domain || currentProspect.company)) {
-      scanHint.innerText = 'Querying Hunter.io for email pattern...';
+      scanHint.innerText = 'Querying Hunter.io fallback...';
       const hunterRes = await enrichWithHunter(config.hunterApiKey, {
         domain: currentProspect.domain,
         fullName: currentProspect.fullName,
@@ -859,18 +873,13 @@ async function handleFullAutoPipeline() {
       }
     }
 
-    // STEP D: If domain still missing, run local smart resolver
-    if (!currentProspect.domain && currentProspect.company) {
-      await handleResolveDomain();
-    } else if (currentProspect.domain) {
-      await checkDomainMX(currentProspect.domain);
-    }
-
-    // STEP E: Render verified emails & pattern candidates
+    // STEP 6: Final render of verified email and candidate pattern pills
     if (currentProspect.domain || currentProspect.directEmail) {
       await handleGenerateAndVerify();
       if (currentProspect.isEnriched) {
-        scanHint.innerText = 'Profile scanned · Verified match found';
+        scanHint.innerText = currentProspect.directEmail.includes('@')
+          ? `✓ Verified: ${currentProspect.directEmail}`
+          : 'Profile scanned · Verified match found';
       } else if (lastEnrichError) {
         scanHint.innerText = `${lastEnrichError}`;
       } else {

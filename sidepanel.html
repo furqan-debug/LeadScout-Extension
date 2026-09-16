@@ -185,7 +185,7 @@
             <div class="setting-head">
               <div class="setting-title-box">
                 <span class="setting-name">Private SMTP Engine</span>
-                <span class="setting-badge badge-neutral">Direct Socket / $0</span>
+                <span class="setting-badge badge-success">Primary Engine ($0 / Unlimited)</span>
               </div>
             </div>
             
@@ -196,12 +196,12 @@
 
             <div class="setting-checkbox-row">
               <input type="checkbox" id="chk-use-private-verifier" checked>
-              <label for="chk-use-private-verifier">Prioritize Private Verifier (Self-Hosted)</label>
+              <label for="chk-use-private-verifier">Use Private Verifier as Primary Engine ($0 Cost)</label>
             </div>
 
             <div class="setting-actions">
               <button id="btn-test-verifier" class="btn-secondary small">
-                <span>Test Connection</span>
+                <span>Check Engine Health</span>
               </button>
               <p id="verifier-test-result" class="test-feedback hidden"></p>
             </div>
@@ -212,9 +212,10 @@
             <div class="setting-head">
               <div class="setting-title-box">
                 <span class="setting-name">Prospeo.io</span>
-                <span class="setting-badge badge-success">75 Free/Mo</span>
+                <span class="setting-badge badge-neutral">Optional Fallback</span>
               </div>
             </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px 0;line-height:1.4;">Only used if Private SMTP engine finds no deliverable match. Clear key to disable completely.</p>
             
             <div class="setting-row">
               <label for="input-prospeo-key" class="setting-label">API Key</label>
