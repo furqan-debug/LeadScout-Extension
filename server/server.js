@@ -50,6 +50,21 @@ const server = http.createServer(async (req, res) => {
   const pathname = reqUrl.pathname;
 
   try {
+    // ── 0. GET / ───────────────────────────────────────────────────────────
+    if (req.method === 'GET' && (pathname === '/' || pathname === '')) {
+      return sendJson(res, 200, {
+        status: 'online',
+        service: 'LeadScout Private SMTP Verifier API',
+        version: '1.0.0',
+        message: 'LeadScout Verifier Engine is online and operational.',
+        endpoints: {
+          health: 'GET /health',
+          verify: 'POST /verify',
+          verifyBatch: 'POST /verify-batch'
+        }
+      });
+    }
+
     // ── 1. GET /health ──────────────────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/health') {
       const port25Check = await testPort25Connectivity();
