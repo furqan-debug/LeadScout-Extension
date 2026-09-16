@@ -16,6 +16,7 @@
     "https://api.apollo.io/*",
     "https://api.hunter.io/*",
     "https://api.prospeo.io/*",
+    "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
     "http://localhost:*/*",
