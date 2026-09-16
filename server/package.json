@@ -1,0 +1,13 @@
+﻿{
+  "name": "leadscout-smtp-verifier",
+  "version": "1.0.0",
+  "description": "Standalone self-hosted SMTP verification engine for LeadScout",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["smtp", "email-verifier", "leadscout"],
+  "author": "",
+  "license": "MIT"
+}

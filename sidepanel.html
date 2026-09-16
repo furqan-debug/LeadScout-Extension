@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadScout - Prospector</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Enterprise Minimalist Top Navigation -->
+    <header class="app-header">
+      <div class="header-main">
+        <div class="brand">
+          <div class="brand-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+          </div>
+          <span class="brand-name">LeadScout</span>
+          <span class="brand-version">v1.3</span>
+        </div>
+        
+        <div class="header-right">
+          <div id="status-indicator" class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-label">Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clean Tab Bar -->
+      <nav class="nav-bar">
+        <button id="tab-prospect" class="nav-tab active">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span>Prospect</span>
+        </button>
+        <button id="tab-saved" class="nav-tab">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Saved</span>
+          <span id="saved-count" class="tab-count">0</span>
+        </button>
+        <button id="tab-settings" class="nav-tab">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- TAB 1: PROSPECT VIEW -->
+    <main id="view-prospect" class="tab-view active">
+      
+      <!-- Subtle 1-line Engine Status Strip -->
+      <div id="banner-api-hint" class="engine-strip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>Ready. Add <a id="link-setup-api" href="#">keys</a> for cloud enrichment.</span>
+      </div>
+
+      <!-- Action Bar / Scan Trigger -->
+      <div class="scan-bar">
+        <button id="btn-scan" class="btn-primary-action">
+          <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="btn-label">Scan Active Profile</span>
+        </button>
+        <span id="scan-hint" class="scan-status-text">Navigate to a LinkedIn profile to begin</span>
+      </div>
+
+      <!-- Compact Profile Card -->
+      <section id="prospect-card" class="prospect-section hidden">
+        <div class="prospect-profile-header">
+          <img id="prospect-avatar" class="prospect-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4' fill='%2394a3b8'/%3E%3Cpath d='M4 20c0-4 4-6 8-6s8 2 8 6' fill='%2394a3b8'/%3E%3C/svg%3E" alt="Avatar">
+          
+          <div class="prospect-info">
+            <div class="name-row">
+              <h2 id="prospect-name" contenteditable="true" spellcheck="false" title="Click to edit name">Prospect Name</h2>
+            </div>
+            <div id="prospect-headline" class="prospect-headline" contenteditable="true" spellcheck="false" title="Click to edit headline">Job Title</div>
+            <div class="prospect-submeta">
+              <span id="prospect-location" class="location-text">Location</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Integrated Metadata Form (Clean 2-column, no clunky boxes) -->
+        <div class="meta-form-grid">
+          <div class="form-cell">
+            <label class="cell-label" for="input-company">Company</label>
+            <input type="text" id="input-company" class="cell-input" placeholder="Company name" spellcheck="false">
+          </div>
+          <div class="form-cell">
+            <label class="cell-label" for="input-domain">Domain</label>
+            <div class="input-action-group">
+              <input type="text" id="input-domain" class="cell-input" placeholder="company.com" spellcheck="false">
+              <button id="btn-resolve-domain" class="btn-input-action" title="Auto-find domain">Find</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inline MX Status Tag -->
+        <div id="mx-status-box" class="mx-status-row hidden">
+          <span id="mx-status-icon" class="mx-dot">●</span>
+          <span id="mx-status-text" class="mx-text">Verifying mail servers...</span>
+        </div>
+
+        <!-- Phone Row (if available) -->
+        <div id="prospect-phone-card" class="phone-section hidden">
+          <div class="section-micro-label">Direct Phone</div>
+          <div id="prospect-phone-list" class="phone-list"></div>
+        </div>
+
+        <!-- Manual Re-verify Button (Subtle, secondary) -->
+        <button id="btn-generate-emails" class="btn-subtle-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 4v6h-6"></path>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          <span>Re-verify Email Permutations</span>
+        </button>
+      </section>
+
+      <!-- Email Results Section -->
+      <section id="email-results-card" class="results-section hidden">
+        <div class="results-header">
+          <span id="email-results-title" class="results-title">Contact Emails</span>
+          <span id="email-results-subtext" class="results-subtext">Deliverability Results</span>
+        </div>
+        <div id="email-candidates-list" class="email-list">
+          <!-- Dynamically inserted -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- TAB 2: SAVED LEADS VIEW -->
+    <main id="view-saved" class="tab-view hidden">
+      <div class="saved-section">
+        <div class="saved-top-bar">
+          <span class="section-title">Saved Leads</span>
+          <div class="saved-btn-group">
+            <button id="btn-export-csv" class="btn-secondary small">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Export CSV</span>
+            </button>
+            <button id="btn-clear-all" class="btn-danger-ghost">Clear</button>
+          </div>
+        </div>
+        <div id="saved-leads-list" class="saved-list">
+          <!-- Dynamically rendered -->
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 3: SETTINGS VIEW -->
+    <main id="view-settings" class="tab-view hidden">
+      <div class="settings-section">
+        <div class="settings-header">
+          <span class="section-title">Verification Engines</span>
+          <span class="section-desc">Configure SMTP engine and enrichment provider keys</span>
+        </div>
+
+        <div class="settings-stack">
+          <!-- Private SMTP Engine -->
+          <div class="setting-group active-group">
+            <div class="setting-head">
+              <div class="setting-title-box">
+                <span class="setting-name">Private SMTP Engine</span>
+                <span class="setting-badge badge-neutral">Direct Socket / $0</span>
+              </div>
+            </div>
+            
+            <div class="setting-row">
+              <label for="input-verifier-url" class="setting-label">Endpoint</label>
+              <input type="text" id="input-verifier-url" class="setting-input" placeholder="http://localhost:3000" value="http://localhost:3000" spellcheck="false">
+            </div>
+
+            <div class="setting-checkbox-row">
+              <input type="checkbox" id="chk-use-private-verifier" checked>
+              <label for="chk-use-private-verifier">Prioritize Private Verifier (Self-Hosted)</label>
+            </div>
+
+            <div class="setting-actions">
+              <button id="btn-test-verifier" class="btn-secondary small">
+                <span>Test Connection</span>
+              </button>
+              <p id="verifier-test-result" class="test-feedback hidden"></p>
+            </div>
+          </div>
+
+          <!-- Prospeo -->
+          <div class="setting-group">
+            <div class="setting-head">
+              <div class="setting-title-box">
+                <span class="setting-name">Prospeo.io</span>
+                <span class="setting-badge badge-success">75 Free/Mo</span>
+              </div>
+            </div>
+            
+            <div class="setting-row">
+              <label for="input-prospeo-key" class="setting-label">API Key</label>
+              <input type="password" id="input-prospeo-key" class="setting-input" placeholder="Paste Prospeo API key">
+            </div>
+
+            <div class="setting-actions">
+              <button id="btn-test-prospeo" class="btn-secondary small">
+                <span>Test Key</span>
+              </button>
+              <a href="https://prospeo.io" target="_blank" class="setting-link">Get Free Key ↗</a>
+              <p id="prospeo-test-result" class="test-feedback hidden"></p>
+            </div>
+          </div>
+
+          <!-- Apollo.io -->
+          <div class="setting-group">
+            <div class="setting-head">
+              <div class="setting-title-box">
+                <span class="setting-name">Apollo.io</span>
+                <span class="setting-badge">Paid API</span>
+              </div>
+            </div>
+            
+            <div class="setting-row">
+              <label for="input-apollo-key" class="setting-label">API Key</label>
+              <input type="password" id="input-apollo-key" class="setting-input" placeholder="Paste Apollo API key">
+            </div>
+
+            <div class="setting-actions">
+              <button id="btn-test-apollo" class="btn-secondary small">
+                <span>Test Key</span>
+              </button>
+              <a href="https://developer.apollo.io/#/keys" target="_blank" class="setting-link">Apollo Console ↗</a>
+              <p id="apollo-test-result" class="test-feedback hidden"></p>
+            </div>
+          </div>
+
+          <!-- Hunter.io -->
+          <div class="setting-group">
+            <div class="setting-head">
+              <div class="setting-title-box">
+                <span class="setting-name">Hunter.io</span>
+                <span class="setting-badge">25 Free/Mo</span>
+              </div>
+            </div>
+            
+            <div class="setting-row">
+              <label for="input-hunter-key" class="setting-label">API Key</label>
+              <input type="password" id="input-hunter-key" class="setting-input" placeholder="Paste Hunter API key">
+            </div>
+          </div>
+
+          <!-- Save Button -->
+          <div class="save-actions">
+            <button id="btn-save-settings" class="btn-primary-action">
+              <span>Save Configuration</span>
+            </button>
+            <p id="settings-save-msg" class="test-feedback hidden">✓ Saved successfully</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
