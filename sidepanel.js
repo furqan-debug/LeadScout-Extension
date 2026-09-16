@@ -280,7 +280,8 @@ function setupEventListeners() {
         if (res.ok) {
           const data = await res.json();
           verifierTestResult.style.color = '#15803d';
-          verifierTestResult.innerText = `✓ Connected! ${data.service} v${data.version}. ${data.port25Status}`;
+          const modeStr = data.port25Open ? 'Direct Port 25 SMTP' : 'Fast Cloud DNS-MX Mode';
+          verifierTestResult.innerText = `✓ Connected! ${data.service} v${data.version} (${modeStr})`;
         } else {
           verifierTestResult.style.color = '#dc2626';
           verifierTestResult.innerText = `❌ Server returned HTTP ${res.status}`;
@@ -983,13 +984,13 @@ async function handleGenerateAndVerify() {
   // If Private SMTP Verifier is active, query it for real-time batch verification
   if (config.usePrivateVerifier && config.verifierUrl && patterns.length > 0 && !currentProspect.directEmail) {
     try {
-      scanHint.innerText = '⚡ Probing mail server via Private SMTP Engine...';
+      scanHint.innerText = '⚡ Probing mail server via Private Engine...';
       const emailList = patterns.map(p => p.email);
       const res = await fetch(`${config.verifierUrl}/verify-batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emails: emailList }),
-        signal: AbortSignal.timeout(12000)
+        signal: AbortSignal.timeout(4000)
       });
 
       if (res.ok) {
@@ -998,7 +999,7 @@ async function handleGenerateAndVerify() {
           currentProspect.directEmail = batchData.verifiedEmail;
           currentProspect.emailStatus = batchData.winnerStatus === 'DELIVERABLE'
             ? 'Private SMTP 250 OK'
-            : 'Catch-All Verified';
+            : (batchData.winnerStatus === 'MX_VERIFIED' ? 'MX Verified Active' : 'Catch-All Verified');
           currentProspect.isEnriched = true;
           scanHint.innerText = `✓ Verified via Private Engine: ${batchData.verifiedEmail}`;
         }
@@ -1012,6 +1013,12 @@ async function handleGenerateAndVerify() {
               if (r.status === 'DELIVERABLE') {
                 p.score = 99;
                 p.likelihood = '✓ SMTP 250 OK';
+              } else if (r.status === 'MX_VERIFIED') {
+                p.score = Math.max(p.score || 0, 75);
+                p.likelihood = '✓ MX Active';
+              } else if (r.status === 'PORT_25_BLOCKED') {
+                p.score = Math.max(p.score || 0, 60);
+                p.likelihood = '✓ MX Route OK';
               } else if (r.status === 'UNDELIVERABLE') {
                 p.score = 5;
                 p.likelihood = '❌ Rejected';
@@ -1026,6 +1033,9 @@ async function handleGenerateAndVerify() {
       }
     } catch (err) {
       console.debug('[LeadScout] Private verifier query note:', err.message);
+      if (scanHint && scanHint.innerText.includes('Probing mail server')) {
+        scanHint.innerText = currentProspect.directEmail ? '✓ Prospect Enriched' : 'Pattern Permutations Ready';
+      }
     }
   }
 

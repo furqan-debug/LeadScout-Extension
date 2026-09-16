@@ -180,14 +180,21 @@ async function testProspeoApi(apiKey) {
       headers: { 'X-KEY': apiKey.trim() }
     });
 
-    if (response.ok) {
-      const data = await response.json().catch(() => ({}));
-      const remaining = data?.response?.credits?.remaining ?? 75;
-      return { success: true, message: `✓ Prospeo Connected! (${remaining} free credits available)` };
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok && !data.error) {
+      const remaining = data?.response?.credits?.remaining ?? data?.credits?.remaining ?? data?.data?.credits?.remaining ?? data?.remaining_credits;
+      if (remaining !== undefined) {
+        if (remaining <= 0) {
+          return { success: false, error: 'Prospeo free quota exhausted (0 credits remaining). Renew or use Private Verifier.' };
+        }
+        return { success: true, message: `✓ Prospeo Connected! (${remaining} credits remaining)` };
+      }
+      return { success: true, message: `✓ Prospeo Connected & Ready!` };
     }
 
-    const err = await response.json().catch(() => ({}));
-    return { success: false, error: err.message || 'Invalid Prospeo API key. Check key in dashboard.' };
+    const errorMsg = data.message || data.error?.message || (response.status === 402 ? 'Prospeo credits depleted (0 remaining).' : 'Invalid Prospeo API key.');
+    return { success: false, error: errorMsg };
   } catch (err) {
     return { success: false, error: `Connection failed: ${err.message}` };
   }

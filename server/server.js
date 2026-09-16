@@ -1,5 +1,5 @@
 const http = require('http');
-const { verifyEmail, verifyBatch, testPort25Connectivity } = require('./verifier');
+const { verifyEmail, verifyBatch, testPort25Connectivity, getCachedPort25Status } = require('./verifier');
 
 const PORT = process.env.PORT || 3000;
 
@@ -67,7 +67,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── 1. GET /health ──────────────────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/health') {
-      const port25Check = await testPort25Connectivity();
+      const port25Check = await getCachedPort25Status();
       return sendJson(res, 200, {
         status: 'online',
         service: 'LeadScout Private SMTP Verifier',
@@ -134,4 +134,8 @@ server.listen(PORT, () => {
   console.log(` Running on: http://localhost:${PORT}`);
   console.log(` Health check: http://localhost:${PORT}/health`);
   console.log(`====================================================`);
+  // Warm up port 25 connectivity check asynchronously
+  getCachedPort25Status().then(check => {
+    console.log(`[Port 25 Status] ${check.reason}`);
+  }).catch(() => {});
 });

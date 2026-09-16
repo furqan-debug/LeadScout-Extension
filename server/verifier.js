@@ -17,6 +17,25 @@ try {
 // In-memory cache for Catch-All status and MX records (TTL: 1 hour)
 const domainCache = new Map();
 
+// In-memory cache for Port 25 connectivity check (TTL: 5 minutes)
+let cachedPort25 = null;
+let lastPort25CheckTime = 0;
+const PORT25_CACHE_TTL = 300000;
+
+/**
+ * Fast cached check for outbound Port 25 availability.
+ * Prevents hanging timeouts on cloud hosts like Render free containers.
+ */
+async function getCachedPort25Status(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedPort25 !== null && (now - lastPort25CheckTime < PORT25_CACHE_TTL)) {
+    return cachedPort25;
+  }
+  cachedPort25 = await testPort25Connectivity();
+  lastPort25CheckTime = now;
+  return cachedPort25;
+}
+
 /**
  * Validates basic email syntax
  */
@@ -227,14 +246,25 @@ async function verifyEmail(email) {
   result.hasMxRecords = true;
   result.mxHost = mxHosts[0];
 
-  // 4. Catch-All Detection
+  // 4. Host Port 25 Availability Check
+  const port25Check = await getCachedPort25Status();
+  if (!port25Check.open) {
+    // Cloud container firewall (Render free tier, AWS default, etc.) blocks outbound Port 25.
+    // Bypass socket probe to prevent hanging timeouts. Return rapid DNS MX verification.
+    result.status = 'MX_VERIFIED';
+    result.score = 75;
+    result.details = `Mail server active (${result.mxHost}). MX records verified. (Raw socket probe bypassed: host Port 25 restricted).`;
+    return result;
+  }
+
+  // 5. Catch-All Detection
   try {
     result.isCatchAll = await checkCatchAll(result.mxHost, domain);
   } catch (e) {
     result.isCatchAll = false;
   }
 
-  // 5. Direct Mailbox Probe
+  // 6. Direct Mailbox Probe
   const probe = await probeSmtpSocket(result.mxHost, result.email);
 
   if (probe.status === 'PORT_25_BLOCKED') {
@@ -277,6 +307,20 @@ async function verifyEmail(email) {
 async function verifyBatch(emails) {
   if (!Array.isArray(emails) || emails.length === 0) {
     return { found: false, verifiedEmail: null, results: [] };
+  }
+
+  const port25Check = await getCachedPort25Status();
+
+  // If Port 25 is blocked on host, verify all candidates rapidly via parallel DNS MX (instant response)
+  if (!port25Check.open) {
+    const results = await Promise.all(emails.map(email => verifyEmail(email)));
+    const winner = results.find(r => r.status === 'MX_VERIFIED') || null;
+    return {
+      found: Boolean(winner),
+      verifiedEmail: winner ? winner.email : null,
+      winnerStatus: winner ? 'MX_VERIFIED' : 'NO_MX',
+      results
+    };
   }
 
   const results = [];
@@ -340,5 +384,6 @@ module.exports = {
   checkCatchAll,
   verifyEmail,
   verifyBatch,
-  testPort25Connectivity
+  testPort25Connectivity,
+  getCachedPort25Status
 };
