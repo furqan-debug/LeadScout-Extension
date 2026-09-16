@@ -36,7 +36,7 @@ let currentProspect = {
 };
 
 let config = {
-  verifierUrl: 'http://localhost:3000',
+  verifierUrl: 'https://leadscout-extension.onrender.com',
   usePrivateVerifier: true,
   prospeoApiKey: '',
   apolloApiKey: '',
@@ -116,7 +116,7 @@ async function loadConfig() {
       'apollo_api_key',
       'hunter_api_key'
     ], (res) => {
-      config.verifierUrl = res.verifier_url || 'http://localhost:3000';
+      config.verifierUrl = res.verifier_url || 'https://leadscout-extension.onrender.com';
       config.usePrivateVerifier = res.use_private_verifier !== false;
       config.prospeoApiKey = res.prospeo_api_key || '';
       config.apolloApiKey = res.apollo_api_key || '';
@@ -270,7 +270,7 @@ function setupEventListeners() {
   // Test Private Verifier Health button in Settings
   if (btnTestVerifier) {
     btnTestVerifier.addEventListener('click', async () => {
-      const verifierEndpoint = (inputVerifierUrl ? inputVerifierUrl.value.trim() : '') || 'http://localhost:3000';
+      const verifierEndpoint = (inputVerifierUrl ? inputVerifierUrl.value.trim() : '') || 'https://leadscout-extension.onrender.com';
       btnTestVerifier.innerText = 'Checking...';
       btnTestVerifier.disabled = true;
       verifierTestResult.classList.remove('hidden');
@@ -296,7 +296,7 @@ function setupEventListeners() {
   }
 
   btnSaveSettings.addEventListener('click', async () => {
-    const verifierUrlVal = inputVerifierUrl ? inputVerifierUrl.value.trim() : 'http://localhost:3000';
+    const verifierUrlVal = inputVerifierUrl ? inputVerifierUrl.value.trim() : 'https://leadscout-extension.onrender.com';
     const useVerifierVal = chkUsePrivateVerifier ? chkUsePrivateVerifier.checked : true;
     const prospeoVal = inputProspeoKey ? inputProspeoKey.value.trim() : '';
     const apolloVal = inputApolloKey ? inputApolloKey.value.trim() : '';
