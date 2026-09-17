@@ -40,6 +40,8 @@ let config = {
   usePrivateVerifier: true,
   prospeoApiKey: '',
   apolloApiKey: '',
+  apolloRevealPhone: false,
+  apolloCredits: null,
   hunterApiKey: ''
 };
 
@@ -96,6 +98,13 @@ const inputApolloKey = document.getElementById('input-apollo-key');
 const chkApolloRevealPhone = document.getElementById('chk-apollo-reveal-phone');
 const btnTestApollo = document.getElementById('btn-test-apollo');
 const apolloTestResult = document.getElementById('apollo-test-result');
+const apolloCreditBadge = document.getElementById('apollo-credit-badge');
+const apolloCreditCount = document.getElementById('apollo-credit-count');
+const btnRefreshCredits = document.getElementById('btn-refresh-credits');
+const apolloCreditInfo = document.getElementById('apollo-credit-info');
+const apolloLiveCredits = document.getElementById('apollo-live-credits');
+const btnRefreshApolloSettings = document.getElementById('btn-refresh-apollo-settings');
+
 const inputHunterKey = document.getElementById('input-hunter-key');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 const settingsSaveMsg = document.getElementById('settings-save-msg');
@@ -116,6 +125,7 @@ async function loadConfig() {
       'prospeo_api_key',
       'apollo_api_key',
       'apollo_reveal_phone',
+      'apollo_cached_credits',
       'hunter_api_key'
     ], (res) => {
       config.verifierUrl = res.verifier_url || 'https://leadscout-extension.onrender.com';
@@ -123,6 +133,7 @@ async function loadConfig() {
       config.prospeoApiKey = res.prospeo_api_key || '';
       config.apolloApiKey = res.apollo_api_key || '';
       config.apolloRevealPhone = res.apollo_reveal_phone === true;
+      config.apolloCredits = res.apollo_cached_credits ?? null;
       config.hunterApiKey = res.hunter_api_key || '';
 
       if (inputVerifierUrl) inputVerifierUrl.value = config.verifierUrl;
@@ -132,16 +143,73 @@ async function loadConfig() {
       if (chkApolloRevealPhone) chkApolloRevealPhone.checked = config.apolloRevealPhone;
       if (inputHunterKey) inputHunterKey.value = config.hunterApiKey;
 
-      updateApiBanner();
+      if (config.apolloCredits !== null) {
+        displayApolloCredits(config.apolloCredits);
+      } else {
+        updateApiBanner();
+      }
+
+      if (config.apolloApiKey) {
+        fetchLiveApolloCredits();
+      }
+
       resolve();
     });
+  });
+}
+
+function displayApolloCredits(credits) {
+  if (credits === null || credits === undefined) return;
+  const numStr = typeof credits === 'number' ? credits.toLocaleString() : String(credits);
+  if (apolloCreditCount) apolloCreditCount.innerText = numStr;
+  if (apolloLiveCredits) apolloLiveCredits.innerText = numStr;
+  if (apolloCreditBadge) apolloCreditBadge.classList.remove('hidden');
+  if (apolloCreditInfo) apolloCreditInfo.classList.remove('hidden');
+
+  if (config.apolloApiKey && bannerApiHint) {
+    bannerApiHint.className = 'engine-strip';
+    bannerApiHint.innerHTML = `<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong> · ${numStr} credits remaining</span>`;
+  }
+}
+
+async function fetchLiveApolloCredits(spin = false) {
+  if (!config.apolloApiKey) {
+    if (apolloCreditBadge) apolloCreditBadge.classList.add('hidden');
+    if (apolloCreditInfo) apolloCreditInfo.classList.add('hidden');
+    return;
+  }
+
+  if (spin) {
+    if (btnRefreshCredits) btnRefreshCredits.classList.add('spinning');
+    if (btnRefreshApolloSettings) btnRefreshApolloSettings.innerText = 'Checking...';
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'GET_APOLLO_CREDITS',
+    payload: { apiKey: config.apolloApiKey }
+  }, (res) => {
+    if (spin) {
+      if (btnRefreshCredits) btnRefreshCredits.classList.remove('spinning');
+      if (btnRefreshApolloSettings) btnRefreshApolloSettings.innerText = '↻ Refresh';
+    }
+
+    if (res && res.success && res.credits !== undefined) {
+      config.apolloCredits = res.credits;
+      chrome.storage.local.set({ apollo_cached_credits: res.credits });
+      displayApolloCredits(res.credits);
+    } else if (res && !res.success) {
+      console.warn('[LeadScout] Live credits fetch note:', res.error);
+    }
   });
 }
 
 function updateApiBanner() {
   if (config.apolloApiKey) {
     bannerApiHint.className = 'engine-strip';
-    bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong> (Primary Verified Source)</span>';
+    const creditStr = config.apolloCredits !== null
+      ? ` · ${typeof config.apolloCredits === 'number' ? config.apolloCredits.toLocaleString() : config.apolloCredits} credits left`
+      : '';
+    bannerApiHint.innerHTML = `<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong>${creditStr}</span>`;
   } else if (config.usePrivateVerifier) {
     bannerApiHint.className = 'engine-strip';
     bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Private SMTP Engine Active</strong> (Self-Hosted / $0 Cost)</span>';
@@ -241,6 +309,21 @@ function setupEventListeners() {
     });
   }
 
+  // Refresh Apollo Live Credits buttons
+  if (btnRefreshCredits) {
+    btnRefreshCredits.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetchLiveApolloCredits(true);
+    });
+  }
+
+  if (btnRefreshApolloSettings) {
+    btnRefreshApolloSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      fetchLiveApolloCredits(true);
+    });
+  }
+
   // Test Apollo API button in Settings
   if (btnTestApollo) {
     btnTestApollo.addEventListener('click', async () => {
@@ -256,13 +339,20 @@ function setupEventListeners() {
         type: 'TEST_APOLLO',
         payload: { apiKey: key }
       }, (res) => {
-        btnTestApollo.innerText = '🔌 Test Connection';
+        btnTestApollo.innerText = '🔌 Test Key';
         btnTestApollo.disabled = false;
         apolloTestResult.classList.remove('hidden');
 
         if (res && res.success) {
           apolloTestResult.style.color = '#15803d';
           apolloTestResult.innerText = res.message || '✓ Apollo API Connected Successfully!';
+          if (res.credits !== undefined && res.credits !== 'Active') {
+            config.apolloCredits = res.credits;
+            chrome.storage.local.set({ apollo_cached_credits: res.credits });
+            displayApolloCredits(res.credits);
+          } else {
+            fetchLiveApolloCredits(true);
+          }
         } else {
           apolloTestResult.style.color = '#dc2626';
           apolloTestResult.innerText = res?.error || '❌ Connection failed. Check your API key.';
@@ -280,15 +370,15 @@ function setupEventListeners() {
       verifierTestResult.classList.remove('hidden');
 
       try {
-        const res = await fetch(`${verifierEndpoint}/health`, { signal: AbortSignal.timeout(5000) });
-        if (res.ok) {
-          const data = await res.json();
+        const res = await fetch(`${verifierEndpoint}/health`, { signal: AbortSignal.timeout(4000) });
+        const data = await res.json();
+        if (data.status === 'ok') {
           verifierTestResult.style.color = '#15803d';
-          const modeStr = data.port25Open ? 'Direct Port 25 SMTP' : 'Fast Cloud DNS-MX Mode';
-          verifierTestResult.innerText = `✓ Connected! ${data.service} v${data.version} (${modeStr})`;
+          const p25Status = data.port25Outbound ? 'Port 25 Direct Active' : 'HTTP Mode Active';
+          verifierTestResult.innerText = `✓ Private Engine Connected (${p25Status}, Uptime: ${Math.round(data.uptime)}s)`;
         } else {
           verifierTestResult.style.color = '#dc2626';
-          verifierTestResult.innerText = `❌ Server returned HTTP ${res.status}`;
+          verifierTestResult.innerText = '❌ Engine reported unhealthy status.';
         }
       } catch (err) {
         verifierTestResult.style.color = '#dc2626';
@@ -323,6 +413,13 @@ function setupEventListeners() {
       config.apolloRevealPhone = apolloRevealPhoneVal;
       config.hunterApiKey = hunterVal;
       updateApiBanner();
+
+      if (apolloVal) {
+        fetchLiveApolloCredits(true);
+      } else {
+        if (apolloCreditBadge) apolloCreditBadge.classList.add('hidden');
+        if (apolloCreditInfo) apolloCreditInfo.classList.add('hidden');
+      }
 
       settingsSaveMsg.classList.remove('hidden');
       setTimeout(() => settingsSaveMsg.classList.add('hidden'), 3000);
@@ -886,6 +983,8 @@ async function handleFullAutoPipeline() {
         }
 
         scanHint.innerText = `✓ Matched in Apollo: ${apolloRes.email || apolloRes.company || 'Verified'}`;
+        // Automatically sync live credit balance
+        fetchLiveApolloCredits();
       } else if (apolloRes && apolloRes.error) {
         lastEnrichError = apolloRes.error;
         scanHint.innerText = `Apollo: ${apolloRes.error}`;

@@ -24,6 +24,11 @@
         </div>
         
         <div class="header-right">
+          <div id="apollo-credit-badge" class="apollo-credit-pill hidden" title="Live Apollo Credits Remaining">
+            <span class="credit-icon">⚡</span>
+            <span id="apollo-credit-count">---</span>
+            <button id="btn-refresh-credits" class="credit-refresh-btn" title="Refresh Live Balance" type="button">↻</button>
+          </div>
           <div id="status-indicator" class="status-indicator">
             <span class="status-dot"></span>
             <span class="status-label">Ready</span>
@@ -253,8 +258,18 @@
               </label>
             </div>
 
+            <div id="apollo-credit-info" class="apollo-status-card hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary);">
+                  <span>⚡ Live Apollo Credits:</span>
+                  <strong id="apollo-live-credits" style="color:#166534;font-size:12px;">---</strong>
+                </span>
+                <button id="btn-refresh-apollo-settings" class="btn-secondary small" type="button" style="padding:2px 8px;font-size:10px;height:22px;">↻ Refresh</button>
+              </div>
+            </div>
+
             <div class="setting-actions">
-              <button id="btn-test-apollo" class="btn-secondary small">
+              <button id="btn-test-apollo" class="btn-secondary small" type="button">
                 <span>Test Key</span>
               </button>
               <a href="https://developer.apollo.io/#/keys" target="_blank" class="setting-link">Apollo Console ↗</a>

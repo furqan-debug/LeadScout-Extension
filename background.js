@@ -89,6 +89,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  // Fetch live Apollo credits
+  if (message.type === 'GET_APOLLO_CREDITS') {
+    const { apiKey } = message.payload || {};
+    fetchApolloCredits(apiKey)
+      .then(res => sendResponse(res))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
 });
 
 async function enrichProspeoApi(apiKey, linkedinUrl) {
@@ -293,8 +302,135 @@ async function testApolloApiKey(apiKey) {
       return { success: false, error: err.message || err.error || `Apollo HTTP ${response.status} (Check key permissions)` };
     }
 
-    return { success: true, message: '✓ Apollo API Connected & Active! (0 test credits spent)' };
+    // Attempt live credit fetch
+    const creditRes = await fetchApolloCredits(apiKey);
+    let creditMsg = '';
+    if (creditRes.success && creditRes.credits !== undefined && creditRes.credits !== 'Active') {
+      const numStr = typeof creditRes.credits === 'number' ? creditRes.credits.toLocaleString() : creditRes.credits;
+      creditMsg = ` (${numStr} credits remaining)`;
+    }
+
+    return {
+      success: true,
+      message: `✓ Apollo API Connected & Active!${creditMsg}`,
+      credits: creditRes.credits
+    };
   } catch (err) {
     return { success: false, error: `Connection failed: ${err.message}` };
   }
+}
+
+async function fetchApolloCredits(apiKey) {
+  if (!apiKey) return { success: false, error: 'No Apollo API key' };
+
+  try {
+    // 1. Primary: GET /api/v1/users/api_profile?include_credit_usage=true (0 credits cost)
+    const response = await fetch('https://api.apollo.io/api/v1/users/api_profile?include_credit_usage=true', {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
+        'X-Api-Key': apiKey.trim()
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      console.log('[LeadScout] Apollo api_profile credit response:', data);
+
+      const parsed = parseCreditsFromApolloResponse(data);
+      if (parsed !== null) {
+        return { success: true, credits: parsed.remaining, total: parsed.total, source: 'api_profile' };
+      }
+    }
+
+    // 2. Secondary fallback: POST /api/v1/usage_stats/api_usage_stats
+    try {
+      const statsRes = await fetch('https://api.apollo.io/api/v1/usage_stats/api_usage_stats', {
+        method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey.trim()
+        }
+      });
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json().catch(() => ({}));
+        console.log('[LeadScout] Apollo usage_stats response:', statsData);
+        const parsed = parseCreditsFromApolloResponse(statsData);
+        if (parsed !== null) {
+          return { success: true, credits: parsed.remaining, total: parsed.total, source: 'usage_stats' };
+        }
+      }
+    } catch (e) {
+      console.debug('[LeadScout] Apollo usage_stats fallback skipped:', e.message);
+    }
+
+    // 3. Header check fallback from health endpoint
+    const healthRes = await fetch('https://api.apollo.io/api/v1/auth/health', {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'X-Api-Key': apiKey.trim()
+      }
+    });
+
+    if (healthRes.ok) {
+      const limitRem = healthRes.headers.get('x-ratelimit-remaining') || healthRes.headers.get('x-credits-remaining');
+      if (limitRem && !isNaN(parseInt(limitRem, 10))) {
+        return { success: true, credits: parseInt(limitRem, 10), total: null, source: 'headers' };
+      }
+      return { success: true, credits: 'Active', total: null, source: 'health' };
+    }
+
+    return { success: false, error: `Apollo returned HTTP ${response.status}` };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function parseCreditsFromApolloResponse(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  // Search containers
+  const containers = [
+    data.credit_usage,
+    data.user?.credit_usage,
+    data.team?.credit_usage,
+    data.usage_stats,
+    data.usage,
+    data.user,
+    data.team,
+    data
+  ].filter(Boolean);
+
+  for (const c of containers) {
+    // Check specific sub-objects (unified_credits, export_credits, lead_credits, credits)
+    const targets = [c.unified_credits, c.export_credits, c.lead_credits, c.credits, c];
+    for (const t of targets) {
+      if (t && typeof t === 'object') {
+        if (typeof t.remaining === 'number') {
+          return { remaining: t.remaining, total: typeof t.limit === 'number' ? t.limit : null };
+        }
+        if (typeof t.available === 'number') {
+          return { remaining: t.available, total: typeof t.limit === 'number' ? t.limit : null };
+        }
+        if (typeof t.limit === 'number' && typeof t.used === 'number') {
+          return { remaining: Math.max(0, t.limit - t.used), total: t.limit };
+        }
+      }
+    }
+  }
+
+  // Fallback: direct numeric property search
+  for (const c of containers) {
+    for (const key of ['remaining_credits', 'available_credits', 'credits_left', 'credits']) {
+      if (typeof c[key] === 'number') {
+        return { remaining: c[key], total: null };
+      }
+    }
+  }
+
+  return null;
 }
