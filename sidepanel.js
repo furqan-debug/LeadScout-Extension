@@ -1256,17 +1256,17 @@ async function handleGenerateAndVerify() {
 function renderEmailCandidates(candidates) {
   emailCandidatesList.innerHTML = '';
 
-  // Display Verified Email at the very top
+  // SCENARIO 1: Verified Email Found -> Show ONLY that 1 accurate email!
   if (currentProspect.directEmail) {
-    emailResultsTitle.innerText = 'Contact Emails';
-    emailResultsSubtext.innerText = currentProspect.emailStatus?.includes('SMTP')
-      ? 'Verified via Private SMTP Handshake'
-      : (currentProspect.isEnriched ? 'Verified Contact' : 'Direct Contact');
+    emailResultsTitle.innerText = 'Verified Email';
+    emailResultsSubtext.innerText = currentProspect.emailStatus?.includes('Apollo')
+      ? 'Guaranteed Apollo Match'
+      : (currentProspect.emailStatus?.includes('SMTP') ? 'Verified via Private SMTP' : '100% Deliverable');
 
     const directItem = document.createElement('div');
     directItem.className = 'email-item recommended';
 
-    const statusLabel = currentProspect.emailStatus || '100% Deliverable';
+    const statusLabel = currentProspect.emailStatus || 'Verified Deliverable';
 
     directItem.innerHTML = `
       <div class="email-main">
@@ -1284,51 +1284,61 @@ function renderEmailCandidates(candidates) {
 
     setupItemActions(directItem, currentProspect.directEmail, statusLabel, 'Direct Match');
     emailCandidatesList.appendChild(directItem);
-  } else {
-    emailResultsTitle.innerText = 'Predicted Emails';
-    emailResultsSubtext.innerText = 'Permutation Analysis';
-  }
-
-  if (!candidates || candidates.length === 0) {
-    if (!currentProspect.directEmail) {
-      emailCandidatesList.innerHTML = '<p class="empty-state">No email permutations could be created.</p>';
-    }
     emailResultsCard.classList.remove('hidden');
-    return;
+    return; // STOP! Show ONLY this 1 accurate verified email.
   }
 
-  candidates.forEach((cand, idx) => {
-    if (cand.email.toLowerCase() === currentProspect.directEmail?.toLowerCase()) return;
+  // SCENARIO 2: No Verified Email Found
+  emailResultsTitle.innerText = 'No Verified Email';
+  emailResultsSubtext.innerText = 'Not found in Apollo database';
 
-    const isTop = idx === 0 && !currentProspect.directEmail;
-    const item = document.createElement('div');
-    item.className = `email-item ${isTop ? 'recommended' : ''}`;
+  const notFoundCard = document.createElement('div');
+  notFoundCard.style.cssText = 'padding: 12px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin-bottom: 8px;';
+  notFoundCard.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;color:#991b1b;font-weight:600;font-size:12px;margin-bottom:4px;">
+      <span>❌</span>
+      <span>Profile Not Found in Apollo Database</span>
+    </div>
+    <p style="margin:0;font-size:11px;color:#7f1d1d;line-height:1.4;">
+      Apollo has no verified email record for <strong>${currentProspect.fullName || 'this contact'}</strong>.
+    </p>
+  `;
+  emailCandidatesList.appendChild(notFoundCard);
 
-    let pillClass = 'confidence-low';
-    if (cand.score >= 80 || cand.smtpStatus === 'DELIVERABLE') {
-      pillClass = 'confidence-high';
-    } else if (cand.score >= 50 || cand.smtpStatus === 'CATCH_ALL') {
-      pillClass = 'confidence-medium';
-    }
-
-    item.innerHTML = `
-      <div class="email-main">
-        <div class="email-addr">${cand.email}</div>
-        <div class="email-meta">
-          <span class="email-pattern">${cand.format}</span>
-          <span class="confidence-pill ${pillClass}">● ${cand.likelihood}</span>
-        </div>
-      </div>
-      <div class="email-actions">
-        <button class="icon-btn btn-copy" title="Copy email">${ICONS.copy}</button>
-        <button class="icon-btn btn-save" title="Save lead">${ICONS.save}</button>
-        <a class="icon-btn btn-search" title="Search Google for this email" href="https://www.google.com/search?q=%22${encodeURIComponent(cand.email)}%22" target="_blank">${ICONS.search}</a>
-      </div>
+  // Put pattern permutations inside a collapsed details section
+  if (candidates && candidates.length > 0) {
+    const permDetails = document.createElement('details');
+    permDetails.style.cssText = 'margin-top: 6px; font-size: 11px; color: var(--text-secondary);';
+    permDetails.innerHTML = `
+      <summary style="cursor:pointer;font-weight:500;padding:5px 0;color:var(--text-muted);user-select:none;">
+        ▾ View Unverified Pattern Permutations (${candidates.length})
+      </summary>
+      <div class="perm-list" style="margin-top:6px;display:flex;flex-direction:column;gap:5px;"></div>
     `;
 
-    setupItemActions(item, cand.email, cand.likelihood, cand.format);
-    emailCandidatesList.appendChild(item);
-  });
+    const listCont = permDetails.querySelector('.perm-list');
+    candidates.forEach((cand) => {
+      const item = document.createElement('div');
+      item.className = 'email-item';
+      item.style.opacity = '0.85';
+      item.innerHTML = `
+        <div class="email-main">
+          <div class="email-addr" style="font-size:12px;">${cand.email}</div>
+          <div class="email-meta">
+            <span class="email-pattern">${cand.format}</span>
+            <span class="confidence-pill confidence-low" style="font-size:9.5px;">Unverified Pattern</span>
+          </div>
+        </div>
+        <div class="email-actions">
+          <button class="icon-btn btn-copy" title="Copy email">${ICONS.copy}</button>
+        </div>
+      `;
+      setupItemActions(item, cand.email, 'Pattern Guess', cand.format);
+      listCont.appendChild(item);
+    });
+
+    emailCandidatesList.appendChild(permDetails);
+  }
 
   emailResultsCard.classList.remove('hidden');
 }

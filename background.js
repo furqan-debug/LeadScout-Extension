@@ -224,7 +224,10 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
   if (fullName) {
     const parts = fullName.trim().split(/\s+/);
     payload.first_name = parts[0] || '';
-    payload.last_name = parts.slice(1).join(' ') || '';
+    const last = parts.slice(1).join(' ').replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').trim();
+    if (last && last.length > 1) {
+      payload.last_name = last;
+    }
   }
   if (company) payload.organization_name = company;
   if (domain) payload.domain = domain;
