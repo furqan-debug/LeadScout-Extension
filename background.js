@@ -74,8 +74,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Handle Apollo People Match via background to avoid CORS
   if (message.type === 'ENRICH_APOLLO') {
-    const { apiKey, linkedinUrl, fullName, company, domain } = message.payload || {};
-    enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain })
+    const { apiKey, linkedinUrl, fullName, company, domain, revealPhone } = message.payload || {};
+    enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain, revealPhone })
       .then(res => sendResponse(res))
       .catch(err => sendResponse({ found: false, error: err.message }));
     return true;
@@ -200,26 +200,25 @@ async function testProspeoApi(apiKey) {
   }
 }
 
-async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain }) {
+async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain, revealPhone = false }) {
   if (!apiKey) return { found: false, error: 'No Apollo API key configured' };
 
   const cleanUrl = linkedinUrl ? linkedinUrl.split('?')[0].replace(/\/$/, '') : '';
   const payload = {
     reveal_personal_emails: true,
-    reveal_phone_number: true
+    reveal_phone_number: revealPhone === true
   };
 
   if (cleanUrl) {
     payload.linkedin_url = cleanUrl;
-  } else {
-    if (fullName) {
-      const parts = fullName.trim().split(/\s+/);
-      payload.first_name = parts[0] || '';
-      payload.last_name = parts.slice(1).join(' ') || '';
-    }
-    if (company) payload.organization_name = company;
-    if (domain) payload.domain = domain;
   }
+  if (fullName) {
+    const parts = fullName.trim().split(/\s+/);
+    payload.first_name = parts[0] || '';
+    payload.last_name = parts.slice(1).join(' ') || '';
+  }
+  if (company) payload.organization_name = company;
+  if (domain) payload.domain = domain;
 
   try {
     const response = await fetch('https://api.apollo.io/api/v1/people/match', {
@@ -280,42 +279,21 @@ async function testApolloApiKey(apiKey) {
   if (!apiKey) return { success: false, error: 'Please enter an Apollo API key.' };
 
   try {
-    // 1. Test Auth Health
     const response = await fetch('https://api.apollo.io/api/v1/auth/health', {
       method: 'GET',
       headers: {
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
         'X-Api-Key': apiKey.trim()
       }
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      return { success: false, error: err.message || err.error || `HTTP ${response.status}` };
+      return { success: false, error: err.message || err.error || `Apollo HTTP ${response.status} (Check key permissions)` };
     }
 
-    // 2. Test People Match permission with a sample query
-    const matchRes = await fetch('https://api.apollo.io/api/v1/people/match', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': apiKey.trim()
-      },
-      body: JSON.stringify({
-        first_name: 'Satya',
-        last_name: 'Nadella',
-        organization_name: 'Microsoft'
-      })
-    });
-
-    if (!matchRes.ok) {
-      const matchErr = await matchRes.json().catch(() => ({}));
-      return {
-        success: false,
-        error: matchErr.message || matchErr.error || `Match endpoint rejected (HTTP ${matchRes.status}). Check if key has Master/Match permissions.`
-      };
-    }
-
-    return { success: true, message: '✓ Apollo API Key & People Match verified working!' };
+    return { success: true, message: '✓ Apollo API Connected & Active! (0 test credits spent)' };
   } catch (err) {
     return { success: false, error: `Connection failed: ${err.message}` };
   }

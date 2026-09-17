@@ -93,6 +93,7 @@ const btnTestProspeo = document.getElementById('btn-test-prospeo');
 const prospeoTestResult = document.getElementById('prospeo-test-result');
 
 const inputApolloKey = document.getElementById('input-apollo-key');
+const chkApolloRevealPhone = document.getElementById('chk-apollo-reveal-phone');
 const btnTestApollo = document.getElementById('btn-test-apollo');
 const apolloTestResult = document.getElementById('apollo-test-result');
 const inputHunterKey = document.getElementById('input-hunter-key');
@@ -114,18 +115,21 @@ async function loadConfig() {
       'use_private_verifier',
       'prospeo_api_key',
       'apollo_api_key',
+      'apollo_reveal_phone',
       'hunter_api_key'
     ], (res) => {
       config.verifierUrl = res.verifier_url || 'https://leadscout-extension.onrender.com';
       config.usePrivateVerifier = res.use_private_verifier !== false;
       config.prospeoApiKey = res.prospeo_api_key || '';
       config.apolloApiKey = res.apollo_api_key || '';
+      config.apolloRevealPhone = res.apollo_reveal_phone === true;
       config.hunterApiKey = res.hunter_api_key || '';
 
       if (inputVerifierUrl) inputVerifierUrl.value = config.verifierUrl;
       if (chkUsePrivateVerifier) chkUsePrivateVerifier.checked = config.usePrivateVerifier;
       if (inputProspeoKey) inputProspeoKey.value = config.prospeoApiKey;
       if (inputApolloKey) inputApolloKey.value = config.apolloApiKey;
+      if (chkApolloRevealPhone) chkApolloRevealPhone.checked = config.apolloRevealPhone;
       if (inputHunterKey) inputHunterKey.value = config.hunterApiKey;
 
       updateApiBanner();
@@ -135,15 +139,15 @@ async function loadConfig() {
 }
 
 function updateApiBanner() {
-  if (config.usePrivateVerifier) {
+  if (config.apolloApiKey) {
+    bannerApiHint.className = 'engine-strip';
+    bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong> (Primary Verified Source)</span>';
+  } else if (config.usePrivateVerifier) {
     bannerApiHint.className = 'engine-strip';
     bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Private SMTP Engine Active</strong> (Self-Hosted / $0 Cost)</span>';
   } else if (config.prospeoApiKey) {
     bannerApiHint.className = 'engine-strip';
-    bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Prospeo Active</strong> (75 free verified lookups enabled)</span>';
-  } else if (config.apolloApiKey) {
-    bannerApiHint.className = 'engine-strip';
-    bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong></span>';
+    bannerApiHint.innerHTML = '<span style="color:var(--success);font-size:10px;">●</span><span><strong>Prospeo Active</strong></span>';
   } else {
     bannerApiHint.className = 'engine-strip';
     bannerApiHint.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg><span>Add <a id="link-setup-api" href="#">API key</a> for cloud enrichment fallback.</span>';
@@ -301,6 +305,7 @@ function setupEventListeners() {
     const useVerifierVal = chkUsePrivateVerifier ? chkUsePrivateVerifier.checked : true;
     const prospeoVal = inputProspeoKey ? inputProspeoKey.value.trim() : '';
     const apolloVal = inputApolloKey ? inputApolloKey.value.trim() : '';
+    const apolloRevealPhoneVal = chkApolloRevealPhone ? chkApolloRevealPhone.checked : false;
     const hunterVal = inputHunterKey ? inputHunterKey.value.trim() : '';
 
     chrome.storage.local.set({
@@ -308,12 +313,14 @@ function setupEventListeners() {
       use_private_verifier: useVerifierVal,
       prospeo_api_key: prospeoVal,
       apollo_api_key: apolloVal,
+      apollo_reveal_phone: apolloRevealPhoneVal,
       hunter_api_key: hunterVal
     }, () => {
       config.verifierUrl = verifierUrlVal;
       config.usePrivateVerifier = useVerifierVal;
       config.prospeoApiKey = prospeoVal;
       config.apolloApiKey = apolloVal;
+      config.apolloRevealPhone = apolloRevealPhoneVal;
       config.hunterApiKey = hunterVal;
       updateApiBanner();
 
@@ -830,13 +837,68 @@ async function handleFullAutoPipeline() {
       await checkDomainMX(currentProspect.domain);
     }
 
-    // STEP 2: If Private SMTP Engine is prioritized (DEFAULT), verify directly via our engine ($0 / Self-Hosted)
-    if (config.usePrivateVerifier && config.verifierUrl && (currentProspect.domain || currentProspect.company)) {
+    // STEP 2: If Apollo API Key is configured, query Apollo FIRST for verified direct data
+    if (config.apolloApiKey) {
+      scanHint.innerText = '⚡ Enriching via Apollo.io database...';
+      const apolloRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          type: 'ENRICH_APOLLO',
+          payload: {
+            apiKey: config.apolloApiKey,
+            linkedinUrl: currentProspect.linkedinUrl,
+            fullName: currentProspect.fullName,
+            company: currentProspect.company,
+            domain: currentProspect.domain,
+            revealPhone: config.apolloRevealPhone === true
+          }
+        }, (res) => {
+          if (chrome.runtime.lastError) {
+            resolve({ found: false, error: chrome.runtime.lastError.message });
+          } else {
+            resolve(res || { found: false, error: 'Empty response' });
+          }
+        });
+      });
+
+      if (apolloRes && apolloRes.found) {
+        currentProspect.isEnriched = true;
+        if (apolloRes.email) {
+          currentProspect.directEmail = apolloRes.email;
+          currentProspect.emailStatus = apolloRes.emailStatus || 'Apollo Verified';
+        }
+        if (apolloRes.company && !currentProspect.company) {
+          currentProspect.company = apolloRes.company;
+          inputCompany.value = apolloRes.company;
+        }
+        if (apolloRes.domain && !currentProspect.domain) {
+          currentProspect.domain = apolloRes.domain;
+          inputDomain.value = apolloRes.domain;
+        }
+        if (apolloRes.jobTitle && (!currentProspect.jobTitle || currentProspect.jobTitle === 'No Title Listed')) {
+          currentProspect.jobTitle = apolloRes.jobTitle;
+          prospectHeadline.innerText = apolloRes.jobTitle;
+        }
+
+        // Display Phones
+        if (apolloRes.phoneNumbers && apolloRes.phoneNumbers.length > 0) {
+          currentProspect.phoneNumbers = apolloRes.phoneNumbers;
+          renderPhoneNumbers(apolloRes.phoneNumbers);
+        }
+
+        scanHint.innerText = `✓ Matched in Apollo: ${apolloRes.email || apolloRes.company || 'Verified'}`;
+      } else if (apolloRes && apolloRes.error) {
+        lastEnrichError = apolloRes.error;
+        scanHint.innerText = `Apollo: ${apolloRes.error}`;
+      }
+    }
+
+    // STEP 3: If Private SMTP Engine is enabled and no direct email yet, verify via Private Engine ($0 Cost)
+    if (!currentProspect.directEmail && config.usePrivateVerifier && config.verifierUrl && (currentProspect.domain || currentProspect.company)) {
       scanHint.innerText = '⚡ Probing mail server via Private Engine ($0 Cost)...';
       await handleGenerateAndVerify();
     }
 
-    // STEP 3: Fallback to Prospeo ONLY if Private Engine did not verify a direct email
+    // STEP 4: Fallback to Prospeo ONLY if still no direct email
     if (!currentProspect.directEmail && config.prospeoApiKey) {
       scanHint.innerText = '⚡ Checking Prospeo fallback database...';
       const prospeoRes = await new Promise((resolve) => {
@@ -892,60 +954,6 @@ async function handleFullAutoPipeline() {
           lastEnrichError = prospeoRes.error;
           scanHint.innerText = `Prospeo: ${prospeoRes.error}`;
         }
-      }
-    }
-
-    // STEP 4: Fallback to Apollo (only if still no direct email)
-    if (!currentProspect.directEmail && config.apolloApiKey) {
-      scanHint.innerText = '⚡ Checking Apollo fallback database...';
-      const apolloRes = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          type: 'ENRICH_APOLLO',
-          payload: {
-            apiKey: config.apolloApiKey,
-            linkedinUrl: currentProspect.linkedinUrl,
-            fullName: currentProspect.fullName,
-            company: currentProspect.company,
-            domain: currentProspect.domain
-          }
-        }, (res) => {
-          if (chrome.runtime.lastError) {
-            resolve({ found: false, error: chrome.runtime.lastError.message });
-          } else {
-            resolve(res || { found: false, error: 'Empty response' });
-          }
-        });
-      });
-
-      if (apolloRes && apolloRes.found) {
-        currentProspect.isEnriched = true;
-        if (apolloRes.email) {
-          currentProspect.directEmail = apolloRes.email;
-          currentProspect.emailStatus = apolloRes.emailStatus || 'Apollo Verified';
-        }
-        if (apolloRes.company && !currentProspect.company) {
-          currentProspect.company = apolloRes.company;
-          inputCompany.value = apolloRes.company;
-        }
-        if (apolloRes.domain && !currentProspect.domain) {
-          currentProspect.domain = apolloRes.domain;
-          inputDomain.value = apolloRes.domain;
-        }
-        if (apolloRes.jobTitle && (!currentProspect.jobTitle || currentProspect.jobTitle === 'No Title Listed')) {
-          currentProspect.jobTitle = apolloRes.jobTitle;
-          prospectHeadline.innerText = apolloRes.jobTitle;
-        }
-
-        // Display Phones
-        if (apolloRes.phoneNumbers && apolloRes.phoneNumbers.length > 0) {
-          currentProspect.phoneNumbers = apolloRes.phoneNumbers;
-          renderPhoneNumbers(apolloRes.phoneNumbers);
-        }
-
-        scanHint.innerText = `✓ Matched in Apollo: ${apolloRes.company || 'Verified'}`;
-      } else if (apolloRes && apolloRes.error) {
-        lastEnrichError = apolloRes.error;
-        scanHint.innerText = `Apollo: ${apolloRes.error}`;
       }
     }
 

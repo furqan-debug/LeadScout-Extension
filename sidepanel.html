@@ -236,13 +236,21 @@
             <div class="setting-head">
               <div class="setting-title-box">
                 <span class="setting-name">Apollo.io</span>
-                <span class="setting-badge">Paid API</span>
+                <span class="setting-badge badge-primary">Primary Enriched Data</span>
               </div>
             </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px 0;line-height:1.4;">When active, Apollo is queried first for verified emails and direct dials (1 credit per email).</p>
             
             <div class="setting-row">
               <label for="input-apollo-key" class="setting-label">API Key</label>
               <input type="password" id="input-apollo-key" class="setting-input" placeholder="Paste Apollo API key">
+            </div>
+
+            <div class="setting-row" style="margin-top:6px;">
+              <label class="setting-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:normal;color:var(--text-secondary);">
+                <input type="checkbox" id="chk-apollo-reveal-phone" style="cursor:pointer;accent-color:var(--primary);">
+                <span>Reveal Mobile Numbers (uses 8 extra Apollo credits)</span>
+              </label>
             </div>
 
             <div class="setting-actions">
