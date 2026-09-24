@@ -898,7 +898,7 @@ async function handleFullAutoPipeline() {
     // Reset prospect state completely
     currentProspect = {
       fullName: data.fullName || 'Unknown Name',
-      jobTitle: data.jobTitle || 'No Title Listed',
+      jobTitle: (data.jobTitle || 'No Title Listed').split('\n')[0].trim(),
       company: safeCompany,
       domain: data.domain || '',
       directEmail: data.directEmail || '',
@@ -908,7 +908,8 @@ async function handleFullAutoPipeline() {
       profilePic: data.profilePic || '',
       linkedinUrl: activeTab.url.split('?')[0].split('#')[0],
       mxStatus: null,
-      isEnriched: false
+      isEnriched: false,
+      apolloError: null
     };
 
     // Populate UI Card
@@ -987,6 +988,7 @@ async function handleFullAutoPipeline() {
         fetchLiveApolloCredits();
       } else if (apolloRes && apolloRes.error) {
         lastEnrichError = apolloRes.error;
+        currentProspect.apolloError = apolloRes.error;
         scanHint.innerText = `Apollo: ${apolloRes.error}`;
       }
     }
@@ -1050,7 +1052,9 @@ async function handleFullAutoPipeline() {
           inputDomain.value = prospeoRes.domain;
         }
         if (prospeoRes.error) {
-          lastEnrichError = prospeoRes.error;
+          if (!currentProspect.apolloError) {
+            lastEnrichError = prospeoRes.error;
+          }
           scanHint.innerText = `Prospeo: ${prospeoRes.error}`;
         }
       }
@@ -1289,18 +1293,45 @@ function renderEmailCandidates(candidates) {
   }
 
   // SCENARIO 2: No Verified Email Found
-  emailResultsTitle.innerText = 'No Verified Email';
-  emailResultsSubtext.innerText = 'Not found in Apollo database';
+  let errorTitle = 'Profile Not Found in Apollo';
+  let errorDesc = `Apollo has no verified email record for <strong>${currentProspect.fullName || 'this contact'}</strong>.`;
+  let errorIcon = '❌';
+  let cardBg = '#fef2f2';
+  let cardBorder = '#fecaca';
+  let textColor = '#7f1d1d';
+  let titleColor = '#991b1b';
+
+  const errText = (currentProspect.apolloError || lastEnrichError || '').toLowerCase();
+  if (errText.includes('credit') || errText.includes('quota') || errText.includes('422')) {
+    errorTitle = 'Apollo Insufficient Credits (Quota Exceeded)';
+    errorDesc = `Apollo returned: <em>"${currentProspect.apolloError || lastEnrichError}"</em>. Your Apollo account or lead credits quota may be exhausted.`;
+    errorIcon = '⚠️';
+    cardBg = '#fffbeb';
+    cardBorder = '#fde68a';
+    titleColor = '#92400e';
+    textColor = '#78350f';
+  } else if (errText.includes('key') || errText.includes('unauthorized') || errText.includes('401') || errText.includes('403')) {
+    errorTitle = 'Apollo API Key Error';
+    errorDesc = `Apollo rejected the API request: <em>"${currentProspect.apolloError || lastEnrichError}"</em>. Please check your key in Settings.`;
+    errorIcon = '🔑';
+    cardBg = '#fffbeb';
+    cardBorder = '#fde68a';
+    titleColor = '#92400e';
+    textColor = '#78350f';
+  }
+
+  emailResultsTitle.innerText = errorTitle.includes('Credits') ? 'Quota Exceeded' : 'No Verified Email';
+  emailResultsSubtext.innerText = errorTitle.includes('Credits') ? 'API Error' : 'Not found in database';
 
   const notFoundCard = document.createElement('div');
-  notFoundCard.style.cssText = 'padding: 12px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin-bottom: 8px;';
+  notFoundCard.style.cssText = `padding: 12px 14px; background: ${cardBg}; border: 1px solid ${cardBorder}; border-radius: 6px; margin-bottom: 8px;`;
   notFoundCard.innerHTML = `
-    <div style="display:flex;align-items:center;gap:6px;color:#991b1b;font-weight:600;font-size:12px;margin-bottom:4px;">
-      <span>❌</span>
-      <span>Profile Not Found in Apollo Database</span>
+    <div style="display:flex;align-items:center;gap:6px;color:${titleColor};font-weight:600;font-size:12px;margin-bottom:4px;">
+      <span>${errorIcon}</span>
+      <span>${errorTitle}</span>
     </div>
-    <p style="margin:0;font-size:11px;color:#7f1d1d;line-height:1.4;">
-      Apollo has no verified email record for <strong>${currentProspect.fullName || 'this contact'}</strong>.
+    <p style="margin:0;font-size:11px;color:${textColor};line-height:1.4;">
+      ${errorDesc}
     </p>
   `;
   emailCandidatesList.appendChild(notFoundCard);

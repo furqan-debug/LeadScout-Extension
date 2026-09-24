@@ -213,10 +213,11 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
   if (!apiKey) return { found: false, error: 'No Apollo API key configured' };
 
   const cleanUrl = linkedinUrl ? linkedinUrl.split('?')[0].replace(/\/$/, '') : '';
-  const payload = {
-    reveal_personal_emails: true,
-    reveal_phone_number: revealPhone === true
-  };
+  const payload = {};
+
+  if (revealPhone === true) {
+    payload.reveal_phone_number = true;
+  }
 
   if (cleanUrl) {
     payload.linkedin_url = cleanUrl;
@@ -233,7 +234,7 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
   if (domain) payload.domain = domain;
 
   try {
-    const response = await fetch('https://api.apollo.io/api/v1/people/match', {
+    let response = await fetch('https://api.apollo.io/api/v1/people/match', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -243,11 +244,28 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
       body: JSON.stringify(payload)
     });
 
+    // If 422 occurred with phone reveal, retry immediately without phone reveal
+    if (response.status === 422 && payload.reveal_phone_number) {
+      console.warn('[LeadScout] Retrying Apollo match without reveal_phone_number to preserve credits...');
+      delete payload.reveal_phone_number;
+      response = await fetch('https://api.apollo.io/api/v1/people/match', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Api-Key': apiKey.trim()
+        },
+        body: JSON.stringify(payload)
+      });
+    }
+
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
-      const detailedError = errJson.message || errJson.error || `Apollo HTTP ${response.status}`;
+      let detailedError = errJson.message || errJson.error || `Apollo HTTP ${response.status}`;
+      // Clean HTML tags from Apollo message (e.g. <a href='...'>Upgrade plan</a>)
+      detailedError = detailedError.replace(/<[^>]*>?/gm, '').trim();
       console.warn('[LeadScout] Apollo people/match error:', response.status, detailedError);
-      return { found: false, error: detailedError };
+      return { found: false, error: detailedError, statusCode: response.status };
     }
 
     const data = await response.json();
@@ -396,6 +414,14 @@ async function fetchApolloCredits(apiKey) {
 function parseCreditsFromApolloResponse(data) {
   if (!data || typeof data !== 'object') return null;
 
+  // Direct check for Apollo num_credits_remaining
+  if (typeof data.num_credits_remaining === 'number') {
+    return {
+      remaining: data.num_credits_remaining,
+      total: data.effective_num_lead_credits || data.effective_num_direct_dial_credits || null
+    };
+  }
+
   // Search containers
   const containers = [
     data.credit_usage,
@@ -409,6 +435,9 @@ function parseCreditsFromApolloResponse(data) {
   ].filter(Boolean);
 
   for (const c of containers) {
+    if (typeof c.num_credits_remaining === 'number') {
+      return { remaining: c.num_credits_remaining, total: c.effective_num_lead_credits || null };
+    }
     // Check specific sub-objects (unified_credits, export_credits, lead_credits, credits)
     const targets = [c.unified_credits, c.export_credits, c.lead_credits, c.credits, c];
     for (const t of targets) {
@@ -428,7 +457,7 @@ function parseCreditsFromApolloResponse(data) {
 
   // Fallback: direct numeric property search
   for (const c of containers) {
-    for (const key of ['remaining_credits', 'available_credits', 'credits_left', 'credits']) {
+    for (const key of ['num_credits_remaining', 'remaining_credits', 'available_credits', 'credits_left', 'credits']) {
       if (typeof c[key] === 'number') {
         return { remaining: c[key], total: null };
       }
