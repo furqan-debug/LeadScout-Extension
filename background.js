@@ -326,15 +326,21 @@ async function testApolloApiKey(apiKey) {
     // Attempt live credit fetch
     const creditRes = await fetchApolloCredits(apiKey);
     let creditMsg = '';
-    if (creditRes.success && creditRes.credits !== undefined && creditRes.credits !== 'Active') {
-      const numStr = typeof creditRes.credits === 'number' ? creditRes.credits.toLocaleString() : creditRes.credits;
-      creditMsg = ` (${numStr} credits remaining)`;
+    if (creditRes.success) {
+      if (creditRes.exportCredits !== null && creditRes.leadCredits !== null) {
+        creditMsg = ` (${creditRes.exportCredits} Export Credits, ${creditRes.leadCredits} Web Credits)`;
+      } else if (creditRes.credits !== undefined && creditRes.credits !== 'Active') {
+        const numStr = typeof creditRes.credits === 'number' ? creditRes.credits.toLocaleString() : creditRes.credits;
+        creditMsg = ` (${numStr} credits remaining)`;
+      }
     }
 
     return {
       success: true,
-      message: `✓ Apollo API Connected & Active!${creditMsg}`,
-      credits: creditRes.credits
+      message: `✓ Apollo API Connected!${creditMsg}`,
+      credits: creditRes.credits,
+      exportCredits: creditRes.exportCredits,
+      leadCredits: creditRes.leadCredits
     };
   } catch (err) {
     return { success: false, error: `Connection failed: ${err.message}` };
@@ -361,7 +367,14 @@ async function fetchApolloCredits(apiKey) {
 
       const parsed = parseCreditsFromApolloResponse(data);
       if (parsed !== null) {
-        return { success: true, credits: parsed.remaining, total: parsed.total, source: 'api_profile' };
+        return {
+          success: true,
+          credits: parsed.exportCredits !== null ? parsed.exportCredits : parsed.remaining,
+          exportCredits: parsed.exportCredits,
+          leadCredits: parsed.leadCredits,
+          total: parsed.total,
+          source: 'api_profile'
+        };
       }
     }
 
@@ -381,7 +394,14 @@ async function fetchApolloCredits(apiKey) {
         console.log('[LeadScout] Apollo usage_stats response:', statsData);
         const parsed = parseCreditsFromApolloResponse(statsData);
         if (parsed !== null) {
-          return { success: true, credits: parsed.remaining, total: parsed.total, source: 'usage_stats' };
+          return {
+            success: true,
+            credits: parsed.exportCredits !== null ? parsed.exportCredits : parsed.remaining,
+            exportCredits: parsed.exportCredits,
+            leadCredits: parsed.leadCredits,
+            total: parsed.total,
+            source: 'usage_stats'
+          };
         }
       }
     } catch (e) {
@@ -414,15 +434,21 @@ async function fetchApolloCredits(apiKey) {
 function parseCreditsFromApolloResponse(data) {
   if (!data || typeof data !== 'object') return null;
 
-  // Direct check for Apollo num_credits_remaining
+  let leadCredits = null;
+  let exportCredits = null;
+  let totalLead = null;
+
   if (typeof data.num_credits_remaining === 'number') {
-    return {
-      remaining: data.num_credits_remaining,
-      total: data.effective_num_lead_credits || data.effective_num_direct_dial_credits || null
-    };
+    leadCredits = data.num_credits_remaining;
+  }
+  if (typeof data.effective_num_export_credits === 'number') {
+    exportCredits = data.effective_num_export_credits;
+  }
+  if (typeof data.effective_num_lead_credits === 'number') {
+    totalLead = data.effective_num_lead_credits;
   }
 
-  // Search containers
+  // Check containers if exportCredits or leadCredits still missing
   const containers = [
     data.credit_usage,
     data.user?.credit_usage,
@@ -435,31 +461,37 @@ function parseCreditsFromApolloResponse(data) {
   ].filter(Boolean);
 
   for (const c of containers) {
-    if (typeof c.num_credits_remaining === 'number') {
-      return { remaining: c.num_credits_remaining, total: c.effective_num_lead_credits || null };
+    if (leadCredits === null && typeof c.num_credits_remaining === 'number') {
+      leadCredits = c.num_credits_remaining;
     }
-    // Check specific sub-objects (unified_credits, export_credits, lead_credits, credits)
-    const targets = [c.unified_credits, c.export_credits, c.lead_credits, c.credits, c];
-    for (const t of targets) {
-      if (t && typeof t === 'object') {
-        if (typeof t.remaining === 'number') {
-          return { remaining: t.remaining, total: typeof t.limit === 'number' ? t.limit : null };
-        }
-        if (typeof t.available === 'number') {
-          return { remaining: t.available, total: typeof t.limit === 'number' ? t.limit : null };
-        }
-        if (typeof t.limit === 'number' && typeof t.used === 'number') {
-          return { remaining: Math.max(0, t.limit - t.used), total: t.limit };
-        }
-      }
+    if (exportCredits === null && typeof c.effective_num_export_credits === 'number') {
+      exportCredits = c.effective_num_export_credits;
     }
+    if (exportCredits === null && c.export_credits && typeof c.export_credits.remaining === 'number') {
+      exportCredits = c.export_credits.remaining;
+    }
+    if (leadCredits === null && c.unified_credits && typeof c.unified_credits.remaining === 'number') {
+      leadCredits = c.unified_credits.remaining;
+    }
+    if (totalLead === null && typeof c.effective_num_lead_credits === 'number') {
+      totalLead = c.effective_num_lead_credits;
+    }
+  }
+
+  if (leadCredits !== null || exportCredits !== null) {
+    return {
+      remaining: exportCredits !== null ? exportCredits : leadCredits,
+      exportCredits: exportCredits,
+      leadCredits: leadCredits,
+      total: totalLead
+    };
   }
 
   // Fallback: direct numeric property search
   for (const c of containers) {
     for (const key of ['num_credits_remaining', 'remaining_credits', 'available_credits', 'credits_left', 'credits']) {
       if (typeof c[key] === 'number') {
-        return { remaining: c[key], total: null };
+        return { remaining: c[key], exportCredits: null, leadCredits: c[key], total: null };
       }
     }
   }
