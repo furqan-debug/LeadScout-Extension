@@ -403,6 +403,23 @@ function setupEventListeners() {
   }
 
   btnSaveSettings.addEventListener('click', async () => {
+    const originalHtml = btnSaveSettings.innerHTML;
+    btnSaveSettings.disabled = true;
+    btnSaveSettings.style.transition = 'all 0.2s ease';
+    btnSaveSettings.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="spinning">
+        <line x1="12" y1="2" x2="12" y2="6"></line>
+        <line x1="12" y1="18" x2="12" y2="22"></line>
+        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+        <line x1="2" y1="12" x2="6" y2="12"></line>
+        <line x1="18" y1="12" x2="22" y2="12"></line>
+        <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+        <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+      </svg>
+      <span>Saving...</span>
+    `;
+
     const verifierUrlVal = inputVerifierUrl ? inputVerifierUrl.value.trim() : 'https://leadscout-extension.onrender.com';
     const useVerifierVal = chkUsePrivateVerifier ? chkUsePrivateVerifier.checked : true;
     const prospeoVal = inputProspeoKey ? inputProspeoKey.value.trim() : '';
@@ -433,8 +450,31 @@ function setupEventListeners() {
         if (apolloCreditInfo) apolloCreditInfo.classList.add('hidden');
       }
 
-      settingsSaveMsg.classList.remove('hidden');
-      setTimeout(() => settingsSaveMsg.classList.add('hidden'), 3000);
+      // Success feedback directly on the button
+      btnSaveSettings.style.background = '#16a34a';
+      btnSaveSettings.style.borderColor = '#15803d';
+      btnSaveSettings.style.color = '#ffffff';
+      btnSaveSettings.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>✓ Saved Successfully!</span>
+      `;
+
+      if (settingsSaveMsg) {
+        settingsSaveMsg.classList.remove('hidden');
+        settingsSaveMsg.style.color = '#15803d';
+        settingsSaveMsg.style.fontWeight = '600';
+      }
+
+      setTimeout(() => {
+        btnSaveSettings.style.background = '';
+        btnSaveSettings.style.borderColor = '';
+        btnSaveSettings.style.color = '';
+        btnSaveSettings.innerHTML = originalHtml;
+        btnSaveSettings.disabled = false;
+        if (settingsSaveMsg) settingsSaveMsg.classList.add('hidden');
+      }, 2000);
     });
   });
 

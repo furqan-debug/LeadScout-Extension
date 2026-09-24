@@ -275,6 +275,10 @@ body {
   border-color: var(--brand-hover);
 }
 
+.btn-primary-action:active {
+  transform: scale(0.98);
+}
+
 .btn-primary-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
