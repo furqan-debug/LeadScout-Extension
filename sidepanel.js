@@ -126,8 +126,6 @@ async function loadConfig() {
       'apollo_api_key',
       'apollo_reveal_phone',
       'apollo_cached_credits',
-      'apollo_cached_export_credits',
-      'apollo_cached_lead_credits',
       'hunter_api_key'
     ], (res) => {
       config.verifierUrl = res.verifier_url || 'https://leadscout-extension.onrender.com';
@@ -136,8 +134,6 @@ async function loadConfig() {
       config.apolloApiKey = res.apollo_api_key || '';
       config.apolloRevealPhone = res.apollo_reveal_phone === true;
       config.apolloCredits = res.apollo_cached_credits ?? null;
-      config.apolloExportCredits = res.apollo_cached_export_credits ?? null;
-      config.apolloLeadCredits = res.apollo_cached_lead_credits ?? null;
       config.hunterApiKey = res.hunter_api_key || '';
 
       if (inputVerifierUrl) inputVerifierUrl.value = config.verifierUrl;
@@ -148,7 +144,7 @@ async function loadConfig() {
       if (inputHunterKey) inputHunterKey.value = config.hunterApiKey;
 
       if (config.apolloCredits !== null) {
-        displayApolloCredits(config.apolloCredits, config.apolloExportCredits, config.apolloLeadCredits);
+        displayApolloCredits(config.apolloCredits);
       } else {
         updateApiBanner();
       }
@@ -162,64 +158,29 @@ async function loadConfig() {
   });
 }
 
-function displayApolloCredits(credits, exportCredits = null, leadCredits = null) {
+function displayApolloCredits(credits) {
   if (credits === null || credits === undefined) return;
 
-  if (exportCredits === null && config.apolloExportCredits !== undefined) exportCredits = config.apolloExportCredits;
-  if (leadCredits === null && config.apolloLeadCredits !== undefined) leadCredits = config.apolloLeadCredits;
+  const numStr = typeof credits === 'number' ? credits.toLocaleString() : String(credits);
 
-  let badgeText = '';
-  let badgeTitle = 'Live Apollo Credits';
-
-  if (exportCredits !== null && leadCredits !== null) {
-    if (exportCredits === 0) {
-      badgeText = `0 Export (${leadCredits.toLocaleString()} Web)`;
-      badgeTitle = `0 API Export Credits remaining (${leadCredits.toLocaleString()} In-App Web Credits). Apollo API requires Export Credits to reveal emails.`;
-    } else {
-      badgeText = `${exportCredits.toLocaleString()} Export`;
-      badgeTitle = `${exportCredits.toLocaleString()} API Export Credits remaining (${leadCredits.toLocaleString()} In-App Web Credits)`;
-    }
-  } else {
-    badgeText = typeof credits === 'number' ? credits.toLocaleString() : String(credits);
-    badgeTitle = `${badgeText} Apollo credits remaining`;
-  }
-
-  if (apolloCreditCount) apolloCreditCount.innerText = badgeText;
+  if (apolloCreditCount) apolloCreditCount.innerText = numStr;
   if (apolloCreditBadge) {
-    apolloCreditBadge.title = badgeTitle;
+    apolloCreditBadge.title = `${numStr} Live Apollo Credits Remaining`;
     apolloCreditBadge.classList.remove('hidden');
-    if (exportCredits === 0) {
-      apolloCreditBadge.style.background = '#fef3c7';
-      apolloCreditBadge.style.color = '#92400e';
-      apolloCreditBadge.style.borderColor = '#fde68a';
-    } else {
-      apolloCreditBadge.style.background = '';
-      apolloCreditBadge.style.color = '';
-      apolloCreditBadge.style.borderColor = '';
-    }
+    apolloCreditBadge.style.background = '';
+    apolloCreditBadge.style.color = '';
+    apolloCreditBadge.style.borderColor = '';
   }
 
   if (apolloLiveCredits) {
-    if (exportCredits !== null && leadCredits !== null) {
-      let html = `<strong>${exportCredits.toLocaleString()}</strong> Export Credits <span style="font-weight:normal;color:var(--text-muted);">(${leadCredits.toLocaleString()} Web Credits)</span>`;
-      if (exportCredits === 0) {
-        html += `<div style="font-size:10px;color:#b45309;margin-top:4px;font-weight:normal;line-height:1.3;">⚠️ Your account has 0 API Export Credits. In Apollo, external API queries consume Export Credits, not Web Lead Credits. Ask your team admin to allocate Export Credits in Apollo Settings ➔ Credit Limits.</div>`;
-      }
-      apolloLiveCredits.innerHTML = html;
-    } else {
-      apolloLiveCredits.innerText = typeof credits === 'number' ? credits.toLocaleString() : String(credits);
-    }
+    apolloLiveCredits.innerHTML = `<strong>${numStr}</strong> credits remaining`;
   }
 
   if (apolloCreditInfo) apolloCreditInfo.classList.remove('hidden');
 
   if (config.apolloApiKey && bannerApiHint) {
     bannerApiHint.className = 'engine-strip';
-    if (exportCredits === 0) {
-      bannerApiHint.innerHTML = `<span style="color:#f59e0b;font-size:10px;">●</span><span><strong>Apollo Active</strong> · <span style="color:#b45309;">0 API Export Credits (${leadCredits ? leadCredits.toLocaleString() : '482'} Web)</span></span>`;
-    } else {
-      bannerApiHint.innerHTML = `<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong> · ${badgeText}</span>`;
-    }
+    bannerApiHint.innerHTML = `<span style="color:var(--success);font-size:10px;">●</span><span><strong>Apollo Active</strong> · ${numStr} credits remaining</span>`;
   }
 }
 
@@ -246,14 +207,8 @@ async function fetchLiveApolloCredits(spin = false) {
 
     if (res && res.success && res.credits !== undefined) {
       config.apolloCredits = res.credits;
-      config.apolloExportCredits = res.exportCredits ?? null;
-      config.apolloLeadCredits = res.leadCredits ?? null;
-      chrome.storage.local.set({
-        apollo_cached_credits: res.credits,
-        apollo_cached_export_credits: res.exportCredits ?? null,
-        apollo_cached_lead_credits: res.leadCredits ?? null
-      });
-      displayApolloCredits(res.credits, res.exportCredits, res.leadCredits);
+      chrome.storage.local.set({ apollo_cached_credits: res.credits });
+      displayApolloCredits(res.credits);
     } else if (res && !res.success) {
       console.warn('[LeadScout] Live credits fetch note:', res.error);
     }
@@ -405,14 +360,8 @@ function setupEventListeners() {
           apolloTestResult.innerText = res.message || '✓ Apollo API Connected Successfully!';
           if (res.credits !== undefined && res.credits !== 'Active') {
             config.apolloCredits = res.credits;
-            config.apolloExportCredits = res.exportCredits ?? null;
-            config.apolloLeadCredits = res.leadCredits ?? null;
-            chrome.storage.local.set({
-              apollo_cached_credits: res.credits,
-              apollo_cached_export_credits: res.exportCredits ?? null,
-              apollo_cached_lead_credits: res.leadCredits ?? null
-            });
-            displayApolloCredits(res.credits, res.exportCredits, res.leadCredits);
+            chrome.storage.local.set({ apollo_cached_credits: res.credits });
+            displayApolloCredits(res.credits);
           } else {
             fetchLiveApolloCredits(true);
           }
@@ -1366,24 +1315,8 @@ function renderEmailCandidates(candidates) {
 
   const errText = (currentProspect.apolloError || lastEnrichError || '').toLowerCase();
   if (errText.includes('credit') || errText.includes('quota') || errText.includes('422')) {
-    const webCreds = config.apolloLeadCredits || (typeof config.apolloCredits === 'number' ? config.apolloCredits : '482');
-    errorTitle = 'Apollo Insufficient API Export Credits';
-    errorDesc = `
-      <div style="margin-bottom:6px;">Apollo returned: <em>"${currentProspect.apolloError || lastEnrichError}"</em>.</div>
-      <div style="background:rgba(255,255,255,0.7);padding:8px 10px;border-radius:4px;border:1px solid #fde68a;font-size:11px;line-height:1.45;color:#78350f;">
-        <strong>Why does this happen if your Apollo dashboard shows credits?</strong><br>
-        Apollo maintains two distinct credit balances:
-        <ul style="margin:4px 0 6px 16px;padding:0;">
-          <li><strong>Web Lead Credits:</strong> Used for browsing profiles directly inside Apollo.io (${typeof webCreds === 'number' ? webCreds.toLocaleString() : webCreds} remaining).</li>
-          <li><strong>Export / API Credits:</strong> Required whenever external tools or Chrome extensions query the Apollo API to reveal emails. Your account currently has <strong>0 Export Credits</strong>.</li>
-        </ul>
-        <strong>How to resolve:</strong>
-        <ol style="margin:4px 0 0 16px;padding:0;">
-          <li>In Apollo.io ➔ <strong>Settings</strong> ➔ <strong>Credit Limits</strong> (or Team Settings), allocate Export Credits to your user seat.</li>
-          <li>Or enable the built-in <strong>Private SMTP Verifier</strong> ($0 cost) in Settings to verify emails without using Apollo credits.</li>
-        </ol>
-      </div>
-    `;
+    errorTitle = 'Apollo Quota / Credit Limit';
+    errorDesc = `Apollo returned: <em>"${currentProspect.apolloError || lastEnrichError}"</em>. If you are on an Apollo team plan, verify your monthly seat allowance in Apollo Settings ➔ Credit Limits.`;
     errorIcon = '⚠️';
     cardBg = '#fffbeb';
     cardBorder = '#fde68a';
