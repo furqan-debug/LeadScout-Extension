@@ -223,7 +223,15 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
     payload.linkedin_url = cleanUrl;
   }
   if (fullName) {
-    const parts = fullName.trim().split(/\s+/);
+    // Strip emojis, audio badges, and degree text
+    const cleanFull = fullName
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, '')
+      .replace(/\b(seek to live|currently behind live)\b/gi, '')
+      .replace(/(\s*[•·|,].*)$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const parts = cleanFull.split(/\s+/);
     payload.first_name = parts[0] || '';
     const last = parts.slice(1).join(' ').replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').trim();
     if (last && last.length > 1) {
@@ -231,7 +239,9 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
     }
   }
   if (company) payload.organization_name = company;
-  if (domain) payload.domain = domain;
+  if (domain && !domain.endsWith('.az') && !domain.endsWith('.ru')) {
+    payload.domain = domain;
+  }
 
   try {
     let response = await fetch('https://api.apollo.io/api/v1/people/match', {
@@ -269,7 +279,31 @@ async function enrichApolloApi(apiKey, { linkedinUrl, fullName, company, domain,
     }
 
     const data = await response.json();
-    const person = data?.person;
+    let person = data?.person;
+
+    // Retry with pure linkedin_url if person has no email and extra filters were sent
+    if ((!person || (!person.email && (!person.phone_numbers || person.phone_numbers.length === 0))) && cleanUrl && (payload.domain || payload.organization_name)) {
+      console.log('[LeadScout] Retrying Apollo match with clean linkedin_url alone...');
+      const fallbackPayload = { linkedin_url: cleanUrl };
+      if (payload.reveal_phone_number) fallbackPayload.reveal_phone_number = true;
+
+      const retryRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Api-Key': apiKey.trim()
+        },
+        body: JSON.stringify(fallbackPayload)
+      }).catch(() => null);
+
+      if (retryRes && retryRes.ok) {
+        const retryData = await retryRes.json().catch(() => ({}));
+        if (retryData?.person && (retryData.person.email || (retryData.person.phone_numbers && retryData.person.phone_numbers.length > 0))) {
+          person = retryData.person;
+        }
+      }
+    }
 
     if (!person || (!person.email && (!person.phone_numbers || person.phone_numbers.length === 0))) {
       return { found: false, error: 'Profile not found in Apollo database.' };

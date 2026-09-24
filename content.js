@@ -16,6 +16,17 @@ async function extractLinkedInProfile() {
     linkedinUrl: window.location.href.split('?')[0].split('#')[0]
   };
 
+  // Helper: clean emojis and non-alphanumeric noise from profile name
+  function cleanFullName(str) {
+    if (!str) return '';
+    return str
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, '')
+      .replace(/\b(seek to live|currently behind live)\b/gi, '')
+      .replace(/(\s*[•·|,].*)$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // Helper: check if a text string is just degree indicator or UI noise
   function isDegreeOrNoise(str) {
     if (!str) return true;
@@ -27,6 +38,8 @@ async function extractLinkedInProfile() {
     if (lo === 'open' || lo === 'premium' || lo.includes('connections') || lo.includes('followers') ||
         lo.includes('contact info') || lo.includes('mutual connection') || lo.includes('message') ||
         lo.includes('following') || lo.includes('follow') || lo.includes('connect') ||
+        lo.includes('seek to live') || lo.includes('behind live') || lo.includes('currently behind') ||
+        lo.includes('audio') || lo.includes('pronunciation') || lo.includes('pronounce') ||
         lo.includes('view my') || lo.includes('profile enhanced') || lo.includes('sales navigator')) return true;
     return false;
   }
@@ -35,6 +48,7 @@ async function extractLinkedInProfile() {
     if (!text) return false;
     const t = text.trim();
     if (isDegreeOrNoise(t)) return false;
+    if (/\b(seek to live|behind live|currently behind|founder|ceo|director|manager|engineer|wizard|speaker|host)\b/i.test(t)) return false;
     const companySuffixes = /\b(productions?|studios?|inc\.?|llc\.?|ltd\.?|corp\.?|group|agency|media|digital|brand|labs?|works?|design|creative|consulting)\b/i;
     const hasComma = t.includes(',');
     const geoWords = /\b(area|region|city|metro|greater|united|emirates|kingdom|states|pakistan|india|uk|usa|uae|canada|australia|europe|asia|africa|remote|worldwide|global|dubai|karachi|lahore|islamabad|london|new york|san francisco|california)\b/i;
@@ -50,7 +64,7 @@ async function extractLinkedInProfile() {
       const items = Array.isArray(parsed) ? parsed : (parsed['@graph'] || [parsed]);
       for (const item of items) {
         if (item && (item['@type'] === 'Person' || item.name)) {
-          if (!data.fullName && item.name) data.fullName = item.name.trim();
+          if (!data.fullName && item.name) data.fullName = cleanFullName(item.name.trim());
           if (!data.jobTitle && item.jobTitle) {
             const jt = Array.isArray(item.jobTitle) ? item.jobTitle[0] : item.jobTitle;
             if (jt && typeof jt === 'string') data.jobTitle = jt.trim();
@@ -81,7 +95,7 @@ async function extractLinkedInProfile() {
       .replace(/\s*\|\s*LinkedIn$/i, '')
       .trim();
     if (cleaned && !cleaned.toLowerCase().includes('feed') && !cleaned.toLowerCase().includes('linkedin')) {
-      data.fullName = cleaned;
+      data.fullName = cleanFullName(cleaned);
     }
   }
 
@@ -91,7 +105,7 @@ async function extractLinkedInProfile() {
     if (h.closest('nav') || h.closest('header') || h.classList.contains('visually-hidden')) continue;
     const t = (h.innerText || h.textContent || '').split('\n')[0].trim();
     if (t && t.length > 1 && !t.toLowerCase().includes('feed') && !t.toLowerCase().includes('linkedin')) {
-      if (!data.fullName) data.fullName = t;
+      if (!data.fullName) data.fullName = cleanFullName(t);
       nameH1 = h;
       break;
     }
@@ -121,6 +135,7 @@ async function extractLinkedInProfile() {
   // 4. Job Title (Headline)
   if (!data.jobTitle) {
     const headlineSelectors = [
+      'main .text-body-medium.break-words',
       '.text-body-medium.break-words',
       '.pv-text-details__left-panel div.text-body-medium',
       'div.text-body-medium.break-words',
@@ -131,14 +146,16 @@ async function extractLinkedInProfile() {
       '[data-view-name="profile-card"] .text-body-medium'
     ];
     for (const sel of headlineSelectors) {
-      const el = topCard ? topCard.querySelector(sel) : document.querySelector(sel);
-      if (el) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        if (el.closest('nav') || el.closest('header') || el.closest('#footer')) continue;
         const t = (el.innerText || el.textContent || '').trim();
-        if (t && t !== data.fullName && !isDegreeOrNoise(t) && t.length > 2 && !t.includes('connections')) {
+        if (t && t !== data.fullName && !isDegreeOrNoise(t) && t.length > 2 && !t.includes('connections') && !t.includes('followers')) {
           data.jobTitle = t.split('\n')[0].trim();
           break;
         }
       }
+      if (data.jobTitle) break;
     }
   }
 

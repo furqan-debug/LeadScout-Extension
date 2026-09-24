@@ -916,7 +916,9 @@ async function handleFullAutoPipeline() {
       directEmail: data.directEmail || '',
       emailStatus: '',
       phoneNumbers: [],
-      location: data.location || 'Location Not Specified',
+      location: (data.location && !data.location.toLowerCase().includes('behind live') && !data.location.toLowerCase().includes('seek to live'))
+        ? data.location
+        : 'Location Not Specified',
       profilePic: data.profilePic || '',
       linkedinUrl: activeTab.url.split('?')[0].split('#')[0],
       mxStatus: null,
@@ -958,7 +960,9 @@ async function handleFullAutoPipeline() {
             linkedinUrl: currentProspect.linkedinUrl,
             fullName: currentProspect.fullName,
             company: currentProspect.company,
-            domain: currentProspect.domain,
+            // Only pass domain to Apollo if it is verified with active MX records!
+            // Passing a dead or unverified domain destroys the Apollo lookup!
+            domain: (currentProspect.mxStatus && currentProspect.mxStatus.hasMx) ? currentProspect.domain : '',
             revealPhone: config.apolloRevealPhone === true
           }
         }, (res) => {
